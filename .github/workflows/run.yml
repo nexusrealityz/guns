@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      MODE: 3c
+      MODE: wordlist
       AMOUNT: 1000
+      WORDLIST_PATH: words.txt
 
       WEBHOOK_AVAILABLE: ${{ secrets.WEBHOOK_AVAILABLE }}
       WEBHOOK_TAKEN: ${{ secrets.WEBHOOK_TAKEN }}
