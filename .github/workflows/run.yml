@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      MODE: 2c
+      MODE: 3c
       AMOUNT: 1000
 
       WEBHOOK_AVAILABLE: ${{ secrets.WEBHOOK_AVAILABLE }}
