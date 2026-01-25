@@ -19,17 +19,27 @@ WEBHOOK_AVAILABLE = os.getenv("WEBHOOK_AVAILABLE")
 WEBHOOK_TAKEN = os.getenv("WEBHOOK_TAKEN")
 WEBHOOK_BANNED = os.getenv("WEBHOOK_BANNED")
 
-ROLE_TAKEN = "1465095412791771318"
-ROLE_BANNED = "1465095383259549818"
-
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
+# ---------------- LIVE WEBHOOK ---------------- #
+async def send_live_update(session, message):
+    if not WEBHOOK_AVAILABLE:
+        return
+
+    payload = {
+        "content": message,
+        "allowed_mentions": {"parse": []}
+    }
+
+    async with session.post(WEBHOOK_AVAILABLE, json=payload) as r:
+        print(f"[LIVE] {message} ({r.status})")
+
 # ---------------- CHECK FUNCTION ---------------- #
-async def check_username(page, username):
+async def check_username(page, username, session):
     try:
         response = await page.goto(
             BASE_URL.format(username),
@@ -48,23 +58,25 @@ async def check_username(page, username):
         text = (await h1.inner_text()).lower() if await h1.count() else ""
 
         if "username not found" in text:
-            print(f"[AVAILABLE] {username}")
             available_list.append(username)
+            await send_live_update(session, f"✅ AVAILABLE: `{username}`")
+
         elif "has been banned" in text:
-            print(f"[BANNED] {username}")
             banned_list.append(username)
+            await send_live_update(session, f"⚠️ BANNED: `{username}`")
+
         else:
-            print(f"[TAKEN] {username}")
             taken_list.append(username)
+            await send_live_update(session, f"❌ TAKEN: `{username}`")
 
     except Exception as e:
-        print(f"[ERROR] {username}: {e}")
         taken_list.append(username)
+        await send_live_update(session, f"❌ ERROR/TOKEN: `{username}`")
 
     return "ok"
 
-# ---------------- WEBHOOK ---------------- #
-async def send_webhook(url, title, names, color, content, roles=None):
+# ---------------- SUMMARY WEBHOOK ---------------- #
+async def send_summary(url, title, names, color):
     if not url:
         return
 
@@ -72,21 +84,17 @@ async def send_webhook(url, title, names, color, content, roles=None):
         names = ["None"]
 
     payload = {
-        "content": content,
         "embeds": [{
             "title": title,
             "description": "```\n" + "\n".join(names[:50]) + "\n```",
             "color": color
         }],
-        "allowed_mentions": {
-            "parse": [],
-            "roles": roles or []
-        }
+        "allowed_mentions": {"parse": []}
     }
 
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=payload) as r:
-            print(f"{title} webhook: {r.status}")
+            print(f"{title} summary webhook: {r.status}")
 
 # ---------------- MAIN ---------------- #
 async def main():
@@ -101,46 +109,25 @@ async def main():
         print("Invalid MODE")
         return
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
+    async with aiohttp.ClientSession() as session:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"]
+            )
 
-        page = await browser.new_page(
-            user_agent=USER_AGENT
-        )
+            page = await browser.new_page(user_agent=USER_AGENT)
 
-        for user in usernames:
-            await check_username(page, user)
+            for user in usernames:
+                await check_username(page, user, session)
+                await asyncio.sleep(1)  # small delay to avoid Discord spam limits
 
-        await browser.close()
+            await browser.close()
 
-    await send_webhook(
-        WEBHOOK_AVAILABLE,
-        "✅ Available Names",
-        available_list,
-        0x57F287,
-        "@everyone"
-    )
-
-    await send_webhook(
-        WEBHOOK_TAKEN,
-        "❌ Taken Names",
-        taken_list,
-        0xED4245,
-        f"<@&{ROLE_TAKEN}>",
-        roles=[ROLE_TAKEN]
-    )
-
-    await send_webhook(
-        WEBHOOK_BANNED,
-        "⚠️ Banned Names",
-        banned_list,
-        0xFEE75C,
-        f"<@&{ROLE_BANNED}>",
-        roles=[ROLE_BANNED]
-    )
+    # Final summaries
+    await send_summary(WEBHOOK_AVAILABLE, "✅ Available Names", available_list, 0x57F287)
+    await send_summary(WEBHOOK_TAKEN, "❌ Taken Names", taken_list, 0xED4245)
+    await send_summary(WEBHOOK_BANNED, "⚠️ Banned Names", banned_list, 0xFEE75C)
 
     print("Done.")
 
