@@ -43,41 +43,68 @@ async def send_live_update(webhook, session, message):
 # ---------------- CHECK FUNCTION ---------------- #
 async def check_username(page, username, session):
     try:
-        response = await page.goto(
+        await page.goto(
             BASE_URL.format(username),
             timeout=30000,
-            wait_until="domcontentloaded"
+            wait_until="networkidle"
         )
+
+        # Give JS / Cloudflare a moment
+        await page.wait_for_timeout(1000)
 
         content = (await page.content()).lower()
 
-        if response and response.status == 429 or any(x in content for x in RATE_LIMIT_TEXT):
+        # ---- Rate limit detection (FIXED precedence + await) ----
+        if "too many requests" in content:
             print("[RATE LIMITED] Sleeping...")
-            send_live_update("https://discord.com/api/webhooks/1465125153003405496/faRHjHg9JgElze49ZxjfW9QzZGwnVlaf0Ak7qC12nYuWmA95b64lsrJK71TMqlWGSIcB", session, f"UPDATES: Rate limited. Sleeping for: `{RATE_RETRY_DELAY}`")
+            await send_live_update(
+                "https://discord.com/api/webhooks/1465125153003405496/faRHjHg9JgElze49ZxjfW9QzZGwnVlaf0Ak7qC12nYuWmA95b64lsrJK71TMqlWGSIcB",
+                session,
+                f"⏳ RATE LIMITED — sleeping {RATE_RETRY_DELAY}s"
+            )
             await asyncio.sleep(RATE_RETRY_DELAY)
             return "retry"
 
-        h1 = page.locator("h1")
-        text = (await h1.inner_text()).lower() if await h1.count() else ""
-
-        if "username not found" in text:
+        # ---- Reliable detection (NO h1-only logic) ----
+        if "username not found" in content:
             available_list.append(username)
-            await send_live_update(WEBHOOK_AVAILABLE, session, f"✅ AVAILABLE: `{username}` @everyone")
+            await send_live_update(
+                WEBHOOK_AVAILABLE,
+                session,
+                f"✅ AVAILABLE: `{username}` | @everyone"
+            )
 
-        elif "has been banned" in text:
+        elif "has been banned" in content:
             banned_list.append(username)
-            await send_live_update(WEBHOOK_BANNED, session, f"⚠️ BANNED: `{username}`")
+            await send_live_update(
+                WEBHOOK_BANNED,
+                session,
+                f"⚠️ BANNED: `{username}`"
+            )
+
+        elif "profile" in content or "followers" in content or "guns.lol/" in content:
+            taken_list.append(username)
+            await send_live_update(
+                WEBHOOK_TAKEN,
+                session,
+                f"❌ TAKEN: `{username}`"
+            )
 
         else:
-            taken_list.append(username)
-            await send_live_update(WEBHOOK_TAKEN, session, f"❌ TAKEN: `{username}`")
+            # Unknown / partial page — retry once later instead of mislabeling
+            print(f"[UNKNOWN] {username} — retrying later")
+            await asyncio.sleep(3)
+            return "retry"
 
     except Exception as e:
         taken_list.append(username)
-        await send_live_update(WEBHOOK_TAKEN, session, f"❌ ERROR/TAKEN: `{username}`")
+        await send_live_update(
+            WEBHOOK_TAKEN,
+            session,
+            f"❌ ERROR/TREATED AS TAKEN: `{username}`"
+        )
 
     return "ok"
-
 # ---------------- SUMMARY WEBHOOK ---------------- #
 async def send_summary(url, title, names, color):
     if not url:
