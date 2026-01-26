@@ -11,7 +11,7 @@ jobs:
 
     env:
       MODE: 2c
-      AMOUNT: 1000
+      AMOUNT: 5000
       WORDLIST: words.txt
 
       WEBHOOK_AVAILABLE: ${{ secrets.WEBHOOK_AVAILABLE }}
