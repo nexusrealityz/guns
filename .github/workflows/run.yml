@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      MODE: wordlist
+      MODE: 2c
       AMOUNT: 1000
       WORDLIST: words.txt
 
