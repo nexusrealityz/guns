@@ -32,11 +32,24 @@ banned_list = []
 taken_list = []
 
 # -------- WEBHOOK -------- #
-async def send_live(webhook, session, msg):
+async def send_live(webhook, session, msg, allow_mentions=False):
     if not webhook:
         return
-    payload = {"content": msg, "allowed_mentions": {"parse": []}}
-    await session.post(webhook, json=payload)
+
+    payload = {
+        "content": msg,
+        "allowed_mentions": (
+            {"parse": ["everyone", "roles"]} if allow_mentions else {"parse": []}
+        )
+    }
+
+    async with session.post(webhook, json=payload) as resp:
+        if resp.status == 429:
+            retry = float(resp.headers.get("Retry-After", "1"))
+            await asyncio.sleep(retry)
+        elif resp.status >= 400:
+            text = await resp.text()
+            print(f"[WEBHOOK ERROR {resp.status}] {text}")
 
 # -------- CHECK -------- #
 async def check_username(page, username, session):
@@ -72,7 +85,8 @@ async def check_username(page, username, session):
             await send_live(
                 WEBHOOK_AVAILABLE,
                 session,
-                f"✅ AVAILABLE: `{username}` | @everyone"
+                f"✅ AVAILABLE: `{username}` @everyone",
+                allow_mentions=True
             )
             return
 
@@ -82,7 +96,8 @@ async def check_username(page, username, session):
             await send_live(
                 WEBHOOK_BANNED,
                 session,
-                f"⚠️ BANNED: `{username}`"
+                f"⚠️ BANNED: `{username}` <@&1465095383259549818>",
+                allow_mentions=True
             )
             return
 
@@ -98,13 +113,14 @@ async def worker(name, queue, page, session):
     while not queue.empty():
         username = await queue.get()
         await check_username(page, username, session)
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(0.6)
         queue.task_done()
 
 # -------- SUMMARY -------- #
 async def send_summary(url, title, names, color):
     if not url:
         return
+
     if not names:
         names = ["None"]
 
@@ -118,7 +134,9 @@ async def send_summary(url, title, names, color):
     }
 
     async with aiohttp.ClientSession() as s:
-        await s.post(url, json=payload)
+        async with s.post(url, json=payload) as resp:
+            if resp.status >= 400:
+                print(f"[SUMMARY ERROR {resp.status}] {await resp.text()}")
 
 # -------- MAIN -------- #
 async def main():
