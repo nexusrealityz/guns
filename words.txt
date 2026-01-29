@@ -587,7 +587,6 @@ bare
 barn
 base
 bath
-bboy
 bead
 beam
 bear
@@ -686,7 +685,6 @@ dial
 diet
 disc
 dish
-dlcs
 dope
 door
 down
@@ -968,8 +966,6 @@ poor
 port
 pose
 post
-powe
-povd
 pull
 pure
 push
