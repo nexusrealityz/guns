@@ -16,7 +16,7 @@ WEBHOOK_TAKEN = os.getenv("WEBHOOK_TAKEN")
 WEBHOOK_BANNED = os.getenv("WEBHOOK_BANNED")
 WEBHOOK_RATE = os.getenv("WEBHOOK_RATE")
 
-MODE = os.getenv("MODE", "wordlist")
+MODE = os.getenv("MODE", "2c")
 WORDLIST = os.getenv("WORDLIST", "words.txt")
 AMOUNT = int(os.getenv("AMOUNT", "5000"))
 CONCURRENCY = int(os.getenv("PAGES", "3"))
